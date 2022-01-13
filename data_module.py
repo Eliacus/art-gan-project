@@ -10,8 +10,8 @@ from torchvision.datasets import ImageFolder
 ROOT = Path(__file__).parent.resolve()
 
 PATH_DATASETS = Path.joinpath(ROOT, "resized")
-BATCH_SIZE = 64
 NUM_WORKERS = int(os.cpu_count() / 2)
+BATCH_SIZE = 64
 IMAGE_SIZE = (128, 128)
 
 
