@@ -110,7 +110,7 @@ class GAN(pl.LightningModule):
         )
         self.discriminator = Discriminator()
 
-        self.validation_z = torch.randn(8, *self.data_shape)
+        self.validation_z = torch.randn(8, self.hparams.latent_dim, 1, 1)
 
     def forward(self, z):
         return self.generator(z)
@@ -122,7 +122,7 @@ class GAN(pl.LightningModule):
         imgs, _ = batch
 
         # Sample noise
-        z = torch.randn(imgs.shape(0), *self.data_shape).type_as(imgs)
+        z = torch.randn(imgs.shape[0], self.hparams.latent_dim, 1, 1).type_as(imgs)
 
         # train generator
         if optimizer_idx == 0:
@@ -136,7 +136,7 @@ class GAN(pl.LightningModule):
             self.logger.experiment.add_image("generated_images", grid, 0)
 
             # Create the ground thruth (i.e all fake)
-            validities = torch.ones(imgs.size(1), 1).type_as(imgs)
+            validities = torch.ones(imgs.size(0), 1).type_as(imgs)
 
             # Forward the images through the discriminator
             predicted_validities = self.discriminator(self.generated_imgs)
@@ -177,7 +177,7 @@ class GAN(pl.LightningModule):
         return [opt_g, opt_d], []
 
     def on_epoch_end(self):
-        z = self.validation_Z.type_as(self.generator.model[0].weight)
+        z = self.validation_z.type_as(self.generator.model[0].weight)
 
         # log sampled images
         sample_images = self(z)

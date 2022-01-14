@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+from typing import Optional
 
 import pytorch_lightning as pl
 import torch
@@ -11,8 +12,8 @@ ROOT = Path(__file__).parent.resolve()
 
 PATH_DATASETS = Path.joinpath(ROOT, "resized")
 NUM_WORKERS = int(os.cpu_count() / 2)
-BATCH_SIZE = 64
-IMAGE_SIZE = (128, 128)
+BATCH_SIZE = 512
+IMAGE_SIZE = (64, 64)
 
 
 class ArtDataModule(pl.LightningDataModule):
@@ -42,7 +43,7 @@ class ArtDataModule(pl.LightningDataModule):
             ]
         )
 
-    def setup(self):
+    def setup(self, stage: Optional[str] = None):
         self.ds = ImageFolder(self.data_dir, self.transforms)
 
     def train_dataloader(self):
