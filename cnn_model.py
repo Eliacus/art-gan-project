@@ -6,91 +6,78 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torchvision
 
-from data_module import BATCH_SIZE
+from art_data_module import BATCH_SIZE
+from utils import accuracy
 
 
 class Generator(nn.Module):
-    def __init__(self, latent_dim, img_shape):
-        super().__init__()
-        self.latent_dim = latent_dim
-        self.img_shape = img_shape
-
+    def __init__(self, nz, ngf, nc):
+        super(Generator, self).__init__()
         self.model = nn.Sequential(
-            # latent_dim x 1 x 1
-            nn.ConvTranspose2d(
-                self.latent_dim, 512, kernel_size=4, stride=1, padding=0, bias=False
-            ),
-            nn.BatchNorm2d(512),
-            nn.ReLU(inplace=True),
-            # 512 x 4 x 4
-            nn.ConvTranspose2d(512, 256, kernel_size=4, stride=2, padding=1, bias=False),
-            nn.BatchNorm2d(256),
-            nn.ReLU(inplace=True),
-            # 256 x 8 x 8
-            nn.ConvTranspose2d(256, 128, kernel_size=4, stride=2, padding=1, bias=False),
-            nn.BatchNorm2d(128),
-            nn.ReLU(inplace=True),
-            # 128 x 16 x 16
-            nn.ConvTranspose2d(128, 64, kernel_size=4, stride=2, padding=1, bias=False),
-            nn.BatchNorm2d(64),
-            nn.ReLU(inplace=True),
-            # 64 x 32 x 32
-            nn.ConvTranspose2d(64, 3, kernel_size=4, stride=2, padding=1, bias=False),
+            # input is Z, going into a convolution
+            nn.ConvTranspose2d(nz, ngf * 8, 4, 1, 0, bias=False),
+            nn.BatchNorm2d(ngf * 8),
+            nn.ReLU(True),
+            # state size. (ngf*8) x 4 x 4
+            nn.ConvTranspose2d(ngf * 8, ngf * 4, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(ngf * 4),
+            nn.ReLU(True),
+            # state size. (ngf*4) x 8 x 8
+            nn.ConvTranspose2d(ngf * 4, ngf * 2, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(ngf * 2),
+            nn.ReLU(True),
+            # state size. (ngf*2) x 16 x 16
+            nn.ConvTranspose2d(ngf * 2, ngf, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(ngf),
+            nn.ReLU(True),
+            # state size. (ngf) x 32 x 32
+            nn.ConvTranspose2d(ngf, nc, 4, 2, 1, bias=False),
             nn.Tanh()
-            # 3 x 64 x 64
+            # state size. (nc) x 64 x 64
         )
 
-    def forward(self, z):
-        img = self.model(z)
-        return img
+    def forward(self, input):
+        return self.model(input)
 
 
 class Discriminator(nn.Module):
-    def __init__(self):
-        super().__init__()
-
+    def __init__(self, nc, ndf):
+        super(Discriminator, self).__init__()
         self.model = nn.Sequential(
-            # 3 x 64 x 64
-            nn.Conv2d(
-                in_channels=3, out_channels=64, kernel_size=4, stride=2, padding=1, bias=False
-            ),
-            nn.BatchNorm2d(num_features=64),
+            # input is (nc) x 64 x 64
+            nn.Conv2d(nc, ndf, 4, 2, 1, bias=False),
             nn.LeakyReLU(0.2, inplace=True),
-            # 64 x 32 x 32
-            nn.Conv2d(
-                in_channels=64, out_channels=128, kernel_size=4, stride=2, padding=1, bias=False
-            ),
-            nn.BatchNorm2d(num_features=128),
+            # state size. (ndf) x 32 x 32
+            nn.Conv2d(ndf, ndf * 2, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(ndf * 2),
             nn.LeakyReLU(0.2, inplace=True),
-            # 128 x 16 x 16
-            nn.Conv2d(
-                in_channels=128, out_channels=256, kernel_size=4, stride=2, padding=1, bias=False
-            ),
-            nn.BatchNorm2d(num_features=256),
-            nn.LeakyReLU(inplace=False),
-            # 256 x 8 x 8
-            nn.Conv2d(256, 512, kernel_size=4, stride=2, padding=1, bias=False),
-            nn.BatchNorm2d(512),
+            # state size. (ndf*2) x 16 x 16
+            nn.Conv2d(ndf * 2, ndf * 4, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(ndf * 4),
             nn.LeakyReLU(0.2, inplace=True),
-            # 512 x 4 x 4
-            nn.Conv2d(512, 1, kernel_size=4, stride=1, padding=0, bias=False),
-            # 1 x 1 x 1
+            # state size. (ndf*4) x 8 x 8
+            nn.Conv2d(ndf * 4, ndf * 8, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(ndf * 8),
+            nn.LeakyReLU(0.2, inplace=True),
+            # state size. (ndf*8) x 4 x 4
+            nn.Conv2d(ndf * 8, 1, 4, 1, 0, bias=False),
             nn.Flatten(),
             nn.Sigmoid(),
         )
 
-    def forward(self, img):
-        validity = self.model(img)
-
-        return validity
+    def forward(self, input):
+        return self.model(input)
 
 
-class GAN(pl.LightningModule):
+class DCGAN(pl.LightningModule):
     def __init__(
         self,
-        channels,
         width,
         height,
+        nc,
+        nz,
+        ngf,
+        ndf,
         latent_dim: int = 128,
         lr: float = 0.0002,
         b1: float = 0.5,
@@ -101,16 +88,16 @@ class GAN(pl.LightningModule):
         super().__init__()
         self.save_hyperparameters()
 
-        self.data_shape = (channels, width, height)
+        self.data_shape = (nc, width, height)
 
         # Networks
-        self.generator = Generator(
-            latent_dim=self.hparams.latent_dim,
-            img_shape=self.data_shape,
-        )
-        self.discriminator = Discriminator()
+        self.generator = Generator(nz, ngf, nc)
+        self.discriminator = Discriminator(nc, ndf)
 
-        self.validation_z = torch.randn(8, self.hparams.latent_dim, 1, 1)
+        self.generator.apply(weights_init)
+        self.discriminator.apply(weights_init)
+
+        self.validation_z = torch.randn(4, self.hparams.latent_dim, 1, 1)
 
     def forward(self, z):
         return self.generator(z)
@@ -131,39 +118,43 @@ class GAN(pl.LightningModule):
             self.generated_imgs = self(z)
 
             # log sampled images
-            sample_imgs = self.generated_imgs[:6]
-            grid = torchvision.utils.make_grid(sample_imgs)
-            self.logger.experiment.add_image("generated_images", grid, 0)
+            # sample_imgs = self.generated_imgs[:6]
+            # grid = torchvision.utils.make_grid(sample_imgs)
+            # self.logger.experiment.add_image("generated_images", grid, 0)
 
             # Create the ground thruth (i.e all fake)
             validities = torch.ones(imgs.size(0), 1).type_as(imgs)
 
             # Forward the images through the discriminator
-            predicted_validities = self.discriminator(self.generated_imgs)
+            predicted_validities = self.discriminator(self(z))
 
             # Calculate adverserial loss
             g_loss = self.adverserial_loss(predicted_validities, validities)
+            generator_acc = accuracy(validities.view(-1), predicted_validities.view(-1))
             tqdm_dict = {"g_loss": g_loss}
+            self.log("generator_accuracy", generator_acc)
+            self.log("g_loss", g_loss)
             output = OrderedDict({"loss": g_loss, "progress_bar": tqdm_dict, "log": tqdm_dict})
             return output
 
         # train discriminator
         if optimizer_idx == 1:
+            valid = torch.ones(imgs.size(0), 1)
+            valid = valid.type_as(imgs)
 
-            # How well can the discriminator identify real images
-            valid = torch.ones(imgs.size(0), 1).type_as(imgs)
-            predicted_validites_real = self.discriminator(imgs)
-            real_loss = self.adverserial_loss(predicted_validites_real, valid)
+            real_loss = self.adverserial_loss(self.discriminator(imgs), valid)
 
-            # How well can discriminator identify fake images
-            fake = torch.zeros(imgs.size(0), 1).type_as(imgs)
-            generated_imgs = self(z).detach()
-            predicted_validites_fake = self.discriminator(generated_imgs)
-            fake_loss = self.adverserial_loss(predicted_validites_fake, fake)
+            # how well can it label as fake?
+            fake = torch.zeros(imgs.size(0), 1)
+            fake = fake.type_as(imgs)
 
+            fake_loss = self.adverserial_loss(self.discriminator(self(z).detach()), fake)
+
+            # discriminator loss is the average of these
             d_loss = (real_loss + fake_loss) / 2
             tqdm_dict = {"d_loss": d_loss}
-            output = OrderedDict({"loss": d_loss, "progress_bar": tqdm_dict, "log": tqdm_dict})
+            self.log("d_loss", d_loss)
+            output = {"loss": d_loss, "progress_bar": tqdm_dict, "log": tqdm_dict}
             return output
 
     def configure_optimizers(self):
@@ -182,4 +173,14 @@ class GAN(pl.LightningModule):
         # log sampled images
         sample_images = self(z)
         grid = torchvision.utils.make_grid(sample_images)
-        self.logger.experiment.add_image("generated_images", grid, self.current_epoch)
+        self.logger.log_image(key="validation_images", images=[grid])
+
+
+# custom weights initialization called on netG and netD
+def weights_init(m):
+    classname = m.__class__.__name__
+    if classname.find("Conv") != -1:
+        nn.init.normal_(m.weight.data, 0.0, 0.02)
+    elif classname.find("BatchNorm") != -1:
+        nn.init.normal_(m.weight.data, 1.0, 0.02)
+        nn.init.constant_(m.bias.data, 0)

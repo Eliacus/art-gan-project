@@ -1,4 +1,7 @@
 resized/**
 images/**
 data/**
+gan-project/**
+lightning_logs/**
 **__pycache__/**
+wandb/**
