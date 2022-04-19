@@ -10,30 +10,37 @@ from art_data_module import BATCH_SIZE
 from utils import accuracy
 
 
+# TODO: Rename all non-explanatory variables
 class Generator(nn.Module):
-    def __init__(self, nz, ngf, nc):
+    def __init__(self, nz, num_generator_features, num_channels):
         super(Generator, self).__init__()
         self.model = nn.Sequential(
             # input is Z, going into a convolution
-            nn.ConvTranspose2d(nz, ngf * 8, 4, 1, 0, bias=False),
-            nn.BatchNorm2d(ngf * 8),
+            nn.ConvTranspose2d(nz, num_generator_features * 8, 4, 1, 0, bias=False),
+            nn.BatchNorm2d(num_generator_features * 8),
             nn.ReLU(True),
-            # state size. (ngf*8) x 4 x 4
-            nn.ConvTranspose2d(ngf * 8, ngf * 4, 4, 2, 1, bias=False),
-            nn.BatchNorm2d(ngf * 4),
+            # state size. (num_generator_features*8) x 4 x 4
+            nn.ConvTranspose2d(
+                num_generator_features * 8, num_generator_features * 4, 4, 2, 1, bias=False
+            ),
+            nn.BatchNorm2d(num_generator_features * 4),
             nn.ReLU(True),
-            # state size. (ngf*4) x 8 x 8
-            nn.ConvTranspose2d(ngf * 4, ngf * 2, 4, 2, 1, bias=False),
-            nn.BatchNorm2d(ngf * 2),
+            # state size. (num_generator_features*4) x 8 x 8
+            nn.ConvTranspose2d(
+                num_generator_features * 4, num_generator_features * 2, 4, 2, 1, bias=False
+            ),
+            nn.BatchNorm2d(num_generator_features * 2),
             nn.ReLU(True),
-            # state size. (ngf*2) x 16 x 16
-            nn.ConvTranspose2d(ngf * 2, ngf, 4, 2, 1, bias=False),
-            nn.BatchNorm2d(ngf),
+            # state size. (num_generator_features*2) x 16 x 16
+            nn.ConvTranspose2d(
+                num_generator_features * 2, num_generator_features, 4, 2, 1, bias=False
+            ),
+            nn.BatchNorm2d(num_generator_features),
             nn.ReLU(True),
-            # state size. (ngf) x 32 x 32
-            nn.ConvTranspose2d(ngf, nc, 4, 2, 1, bias=False),
+            # state size. (num_generator_features) x 32 x 32
+            nn.ConvTranspose2d(num_generator_features, num_channels, 4, 2, 1, bias=False),
             nn.Tanh()
-            # state size. (nc) x 64 x 64
+            # state size. (num_channels) x 64 x 64
         )
 
     def forward(self, input):
@@ -41,26 +48,32 @@ class Generator(nn.Module):
 
 
 class Discriminator(nn.Module):
-    def __init__(self, nc, ndf):
+    def __init__(self, num_channels, num_discriminator_features):
         super(Discriminator, self).__init__()
         self.model = nn.Sequential(
-            # input is (nc) x 64 x 64
-            nn.Conv2d(nc, ndf, 4, 2, 1, bias=False),
+            # input is (num_channels) x 64 x 64
+            nn.Conv2d(num_channels, num_discriminator_features, 4, 2, 1, bias=False),
             nn.LeakyReLU(0.2, inplace=True),
-            # state size. (ndf) x 32 x 32
-            nn.Conv2d(ndf, ndf * 2, 4, 2, 1, bias=False),
-            nn.BatchNorm2d(ndf * 2),
+            # state size. (num_discriminator_features) x 32 x 32
+            nn.Conv2d(
+                num_discriminator_features, num_discriminator_features * 2, 4, 2, 1, bias=False
+            ),
+            nn.BatchNorm2d(num_discriminator_features * 2),
             nn.LeakyReLU(0.2, inplace=True),
-            # state size. (ndf*2) x 16 x 16
-            nn.Conv2d(ndf * 2, ndf * 4, 4, 2, 1, bias=False),
-            nn.BatchNorm2d(ndf * 4),
+            # state size. (num_discriminator_features*2) x 16 x 16
+            nn.Conv2d(
+                num_discriminator_features * 2, num_discriminator_features * 4, 4, 2, 1, bias=False
+            ),
+            nn.BatchNorm2d(num_discriminator_features * 4),
             nn.LeakyReLU(0.2, inplace=True),
-            # state size. (ndf*4) x 8 x 8
-            nn.Conv2d(ndf * 4, ndf * 8, 4, 2, 1, bias=False),
-            nn.BatchNorm2d(ndf * 8),
+            # state size. (num_discriminator_features*4) x 8 x 8
+            nn.Conv2d(
+                num_discriminator_features * 4, num_discriminator_features * 8, 4, 2, 1, bias=False
+            ),
+            nn.BatchNorm2d(num_discriminator_features * 8),
             nn.LeakyReLU(0.2, inplace=True),
-            # state size. (ndf*8) x 4 x 4
-            nn.Conv2d(ndf * 8, 1, 4, 1, 0, bias=False),
+            # state size. (num_discriminator_features*8) x 4 x 4
+            nn.Conv2d(num_discriminator_features * 8, 1, 4, 1, 0, bias=False),
             nn.Flatten(),
             nn.Sigmoid(),
         )
@@ -74,10 +87,10 @@ class DCGAN(pl.LightningModule):
         self,
         width,
         height,
-        nc,
+        num_channels,
         nz,
-        ngf,
-        ndf,
+        num_generator_features,
+        num_discriminator_features,
         latent_dim: int = 128,
         lr: float = 0.0002,
         b1: float = 0.5,
@@ -88,11 +101,11 @@ class DCGAN(pl.LightningModule):
         super().__init__()
         self.save_hyperparameters()
 
-        self.data_shape = (nc, width, height)
+        self.data_shape = (num_channels, width, height)
 
         # Networks
-        self.generator = Generator(nz, ngf, nc)
-        self.discriminator = Discriminator(nc, ndf)
+        self.generator = Generator(nz, num_generator_features, num_channels)
+        self.discriminator = Discriminator(num_channels, num_discriminator_features)
 
         self.generator.apply(weights_init)
         self.discriminator.apply(weights_init)
