@@ -170,7 +170,7 @@ class DCGAN(pl.LightningModule):
 
         return [opt_g, opt_d], []
 
-    def on_epoch_end(self):
+    def on_train_epoch_end(self):
         z = self.validation_z.type_as(self.generator.model[0].weight)
 
         # log sampled images

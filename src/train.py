@@ -18,7 +18,7 @@ latent_dim = 128
 num_generator_features = 64
 
 # Size of feature maps in discriminator
-num_discriminator_features = 64
+num_discriminator_features = 2 * 64
 
 NUM_WORKERS = int(os.cpu_count() / 2)
 BATCH_SIZE = 128
