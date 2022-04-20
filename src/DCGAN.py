@@ -6,17 +6,15 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torchvision
 
-from art_data_module import BATCH_SIZE
 from utils import accuracy
 
 
-# TODO: Rename all non-explanatory variables
 class Generator(nn.Module):
-    def __init__(self, nz, num_generator_features, num_channels):
+    def __init__(self, latent_dim, num_generator_features, num_channels):
         super(Generator, self).__init__()
         self.model = nn.Sequential(
             # input is Z, going into a convolution
-            nn.ConvTranspose2d(nz, num_generator_features * 8, 4, 1, 0, bias=False),
+            nn.ConvTranspose2d(latent_dim, num_generator_features * 8, 4, 1, 0, bias=False),
             nn.BatchNorm2d(num_generator_features * 8),
             nn.ReLU(True),
             # state size. (num_generator_features*8) x 4 x 4
@@ -85,26 +83,21 @@ class Discriminator(nn.Module):
 class DCGAN(pl.LightningModule):
     def __init__(
         self,
-        width,
-        height,
-        num_channels,
-        nz,
-        num_generator_features,
-        num_discriminator_features,
+        num_channels: int,
+        num_generator_features: int,
+        num_discriminator_features: int,
         latent_dim: int = 128,
         lr: float = 0.0002,
         b1: float = 0.5,
         b2: float = 0.999,
-        batch_size: int = BATCH_SIZE,
+        batch_size: int = 128,
         **kwargs,
     ):
         super().__init__()
         self.save_hyperparameters()
 
-        self.data_shape = (num_channels, width, height)
-
         # Networks
-        self.generator = Generator(nz, num_generator_features, num_channels)
+        self.generator = Generator(latent_dim, num_generator_features, num_channels)
         self.discriminator = Discriminator(num_channels, num_discriminator_features)
 
         self.generator.apply(weights_init)
@@ -124,16 +117,11 @@ class DCGAN(pl.LightningModule):
         # Sample noise
         z = torch.randn(imgs.shape[0], self.hparams.latent_dim, 1, 1).type_as(imgs)
 
-        # train generator
+        # Train generator
         if optimizer_idx == 0:
 
             # Generate images from generator
             self.generated_imgs = self(z)
-
-            # log sampled images
-            # sample_imgs = self.generated_imgs[:6]
-            # grid = torchvision.utils.make_grid(sample_imgs)
-            # self.logger.experiment.add_image("generated_images", grid, 0)
 
             # Create the ground thruth (i.e all fake)
             validities = torch.ones(imgs.size(0), 1).type_as(imgs)
@@ -143,6 +131,8 @@ class DCGAN(pl.LightningModule):
 
             # Calculate adverserial loss
             g_loss = self.adverserial_loss(predicted_validities, validities)
+
+            # Log
             generator_acc = accuracy(validities.view(-1), predicted_validities.view(-1))
             tqdm_dict = {"g_loss": g_loss}
             self.log("generator_accuracy", generator_acc)
@@ -157,7 +147,7 @@ class DCGAN(pl.LightningModule):
 
             real_loss = self.adverserial_loss(self.discriminator(imgs), valid)
 
-            # how well can it label as fake?
+            # How well can it label as fake?
             fake = torch.zeros(imgs.size(0), 1)
             fake = fake.type_as(imgs)
 
@@ -189,8 +179,9 @@ class DCGAN(pl.LightningModule):
         self.logger.log_image(key="validation_images", images=[grid])
 
 
-# custom weights initialization called on netG and netD
 def weights_init(m):
+    """Custom weight initialization used for the generator and discriminator"""
+
     classname = m.__class__.__name__
     if classname.find("Conv") != -1:
         nn.init.normal_(m.weight.data, 0.0, 0.02)
