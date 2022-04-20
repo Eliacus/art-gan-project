@@ -6,7 +6,7 @@ import torchvision.transforms as transforms
 from torch.utils.data import DataLoader
 from torchvision.datasets import ImageFolder
 
-ROOT = Path(__file__).parent.resolve()
+ROOT = Path(__file__).parent.parent.resolve()
 
 
 class GANImageDataModule(pl.LightningDataModule):
@@ -14,8 +14,8 @@ class GANImageDataModule(pl.LightningDataModule):
         self,
         batch_size: int,
         num_workers: int,
-        image_size: tuple,
         data_path: str,
+        image_size: tuple = (64, 64),
     ):
         """Generic datamodule for image datasets using the pytorchvision ImageFolder class
 
@@ -30,8 +30,6 @@ class GANImageDataModule(pl.LightningDataModule):
         self.num_workers = num_workers
         self.image_size = image_size
 
-        # Internally set variables
-        # NOTE: Maybe theese should be moved somewhere else?
         self.normalization_schema = (0.5, 0.5, 0.5), (0.5, 0.5, 0.5)
 
         # Transforms
@@ -61,13 +59,13 @@ class CelebADataModule(GANImageDataModule):
         self,
         batch_size: int,
         num_workers: int,
-        image_size: tuple,
+        image_size: tuple = (64, 64),
     ):
         super().__init__(
-            batch_size,
-            num_workers,
-            image_size,
+            batch_size=batch_size,
+            num_workers=num_workers,
             data_path="data/celeba/img_align_celeba",
+            image_size=image_size,
         )
 
 
@@ -76,13 +74,13 @@ class ArtDataModule(GANImageDataModule):
         self,
         batch_size: int,
         num_workers: int,
-        image_size: tuple,
+        image_size: tuple = (64, 64),
     ):
         super().__init__(
-            batch_size,
-            num_workers,
-            image_size,
+            batch_size=batch_size,
+            num_workers=num_workers,
             data_path="data/art_dataset/resized",
+            image_size=image_size,
         )
 
 
