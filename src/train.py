@@ -15,16 +15,16 @@ num_channels = 3
 latent_dim = 128
 
 # Size of feature maps in generator
-num_generator_features = 64
+num_generator_features = 128
 
 # Size of feature maps in discriminator
-num_discriminator_features = 2 * 64
+num_discriminator_features = 64
 
-NUM_WORKERS = int(os.cpu_count() / 2)
-BATCH_SIZE = 128
+NUM_WORKERS = int(os.cpu_count() - 1)
+BATCH_SIZE = 256
 
 wandb_logger = WandbLogger(project="gan-project")
-dm = data_modules[dataset](batch_size=BATCH_SIZE, num_workers=10)
+dm = data_modules[dataset](batch_size=BATCH_SIZE, num_workers=NUM_WORKERS)
 
 model = DCGAN(
     num_channels=num_channels,
@@ -33,5 +33,12 @@ model = DCGAN(
     num_discriminator_features=num_discriminator_features,
 )
 
-trainer = Trainer(max_epochs=1000, log_every_n_steps=30, logger=wandb_logger)
+trainer = Trainer(
+    gpus=1,
+    max_epochs=1000,
+    precision=16,
+    log_every_n_steps=30,
+    logger=wandb_logger,
+    track_grad_norm=2,
+)
 trainer.fit(model, dm)
