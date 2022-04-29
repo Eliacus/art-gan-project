@@ -73,7 +73,7 @@ class Discriminator(nn.Module):
             # state size. (num_discriminator_features*8) x 4 x 4
             nn.Conv2d(num_discriminator_features * 8, 1, 4, 1, 0, bias=False),
             nn.Flatten(),
-            nn.Sigmoid(),
+            # nn.Sigmoid(),
         )
 
     def forward(self, input):
@@ -109,7 +109,8 @@ class DCGAN(pl.LightningModule):
         return self.generator(z)
 
     def adverserial_loss(self, y_hat, y):
-        return F.binary_cross_entropy(y_hat, y)
+        # return F.binary_cross_entropy(y_hat, y)
+        return F.binary_cross_entropy_with_logits(y_hat, y)
 
     def training_step(self, batch, batch_idx, optimizer_idx):
         imgs, _ = batch
@@ -155,20 +156,25 @@ class DCGAN(pl.LightningModule):
 
             # discriminator loss is the average of these
             d_loss = (real_loss + fake_loss) / 2
+
             tqdm_dict = {"d_loss": d_loss}
             self.log("d_loss", d_loss)
             output = {"loss": d_loss, "progress_bar": tqdm_dict, "log": tqdm_dict}
             return output
 
     def configure_optimizers(self):
-        lr = self.hparams.lr
-        b1 = self.hparams.b1
-        b2 = self.hparams.b2
+        generator_optimizer = torch.optim.Adam(
+            self.generator.parameters(),
+            lr=self.hparams.lr,
+            betas=(self.hparams.b1, self.hparams.b2),
+        )
+        discriminator_optimizer = torch.optim.Adam(
+            self.discriminator.parameters(),
+            lr=self.hparams.lr,
+            betas=(self.hparams.b1, self.hparams.b2),
+        )
 
-        opt_g = torch.optim.Adam(self.generator.parameters(), lr=lr, betas=(b1, b2))
-        opt_d = torch.optim.Adam(self.discriminator.parameters(), lr=lr, betas=(b1, b2))
-
-        return [opt_g, opt_d], []
+        return [generator_optimizer, discriminator_optimizer], []
 
     def on_train_epoch_end(self):
         z = self.validation_z.type_as(self.generator.model[0].weight)
