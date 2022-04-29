@@ -6,34 +6,39 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torchvision
 
-from art_data_module import BATCH_SIZE
 from utils import accuracy
 
 
 class Generator(nn.Module):
-    def __init__(self, nz, ngf, nc):
+    def __init__(self, latent_dim, num_generator_features, num_channels):
         super(Generator, self).__init__()
         self.model = nn.Sequential(
             # input is Z, going into a convolution
-            nn.ConvTranspose2d(nz, ngf * 8, 4, 1, 0, bias=False),
-            nn.BatchNorm2d(ngf * 8),
+            nn.ConvTranspose2d(latent_dim, num_generator_features * 8, 4, 1, 0, bias=False),
+            nn.BatchNorm2d(num_generator_features * 8),
             nn.ReLU(True),
-            # state size. (ngf*8) x 4 x 4
-            nn.ConvTranspose2d(ngf * 8, ngf * 4, 4, 2, 1, bias=False),
-            nn.BatchNorm2d(ngf * 4),
+            # state size. (num_generator_features*8) x 4 x 4
+            nn.ConvTranspose2d(
+                num_generator_features * 8, num_generator_features * 4, 4, 2, 1, bias=False
+            ),
+            nn.BatchNorm2d(num_generator_features * 4),
             nn.ReLU(True),
-            # state size. (ngf*4) x 8 x 8
-            nn.ConvTranspose2d(ngf * 4, ngf * 2, 4, 2, 1, bias=False),
-            nn.BatchNorm2d(ngf * 2),
+            # state size. (num_generator_features*4) x 8 x 8
+            nn.ConvTranspose2d(
+                num_generator_features * 4, num_generator_features * 2, 4, 2, 1, bias=False
+            ),
+            nn.BatchNorm2d(num_generator_features * 2),
             nn.ReLU(True),
-            # state size. (ngf*2) x 16 x 16
-            nn.ConvTranspose2d(ngf * 2, ngf, 4, 2, 1, bias=False),
-            nn.BatchNorm2d(ngf),
+            # state size. (num_generator_features*2) x 16 x 16
+            nn.ConvTranspose2d(
+                num_generator_features * 2, num_generator_features, 4, 2, 1, bias=False
+            ),
+            nn.BatchNorm2d(num_generator_features),
             nn.ReLU(True),
-            # state size. (ngf) x 32 x 32
-            nn.ConvTranspose2d(ngf, nc, 4, 2, 1, bias=False),
+            # state size. (num_generator_features) x 32 x 32
+            nn.ConvTranspose2d(num_generator_features, num_channels, 4, 2, 1, bias=False),
             nn.Tanh()
-            # state size. (nc) x 64 x 64
+            # state size. (num_channels) x 64 x 64
         )
 
     def forward(self, input):
@@ -41,26 +46,32 @@ class Generator(nn.Module):
 
 
 class Discriminator(nn.Module):
-    def __init__(self, nc, ndf):
+    def __init__(self, num_channels, num_discriminator_features):
         super(Discriminator, self).__init__()
         self.model = nn.Sequential(
-            # input is (nc) x 64 x 64
-            nn.Conv2d(nc, ndf, 4, 2, 1, bias=False),
+            # input is (num_channels) x 64 x 64
+            nn.Conv2d(num_channels, num_discriminator_features, 4, 2, 1, bias=False),
             nn.LeakyReLU(0.2, inplace=True),
-            # state size. (ndf) x 32 x 32
-            nn.Conv2d(ndf, ndf * 2, 4, 2, 1, bias=False),
-            nn.BatchNorm2d(ndf * 2),
+            # state size. (num_discriminator_features) x 32 x 32
+            nn.Conv2d(
+                num_discriminator_features, num_discriminator_features * 2, 4, 2, 1, bias=False
+            ),
+            nn.BatchNorm2d(num_discriminator_features * 2),
             nn.LeakyReLU(0.2, inplace=True),
-            # state size. (ndf*2) x 16 x 16
-            nn.Conv2d(ndf * 2, ndf * 4, 4, 2, 1, bias=False),
-            nn.BatchNorm2d(ndf * 4),
+            # state size. (num_discriminator_features*2) x 16 x 16
+            nn.Conv2d(
+                num_discriminator_features * 2, num_discriminator_features * 4, 4, 2, 1, bias=False
+            ),
+            nn.BatchNorm2d(num_discriminator_features * 4),
             nn.LeakyReLU(0.2, inplace=True),
-            # state size. (ndf*4) x 8 x 8
-            nn.Conv2d(ndf * 4, ndf * 8, 4, 2, 1, bias=False),
-            nn.BatchNorm2d(ndf * 8),
+            # state size. (num_discriminator_features*4) x 8 x 8
+            nn.Conv2d(
+                num_discriminator_features * 4, num_discriminator_features * 8, 4, 2, 1, bias=False
+            ),
+            nn.BatchNorm2d(num_discriminator_features * 8),
             nn.LeakyReLU(0.2, inplace=True),
-            # state size. (ndf*8) x 4 x 4
-            nn.Conv2d(ndf * 8, 1, 4, 1, 0, bias=False),
+            # state size. (num_discriminator_features*8) x 4 x 4
+            nn.Conv2d(num_discriminator_features * 8, 1, 4, 1, 0, bias=False),
             nn.Flatten(),
             nn.Sigmoid(),
         )
@@ -72,27 +83,22 @@ class Discriminator(nn.Module):
 class DCGAN(pl.LightningModule):
     def __init__(
         self,
-        width,
-        height,
-        nc,
-        nz,
-        ngf,
-        ndf,
+        num_channels: int,
+        num_generator_features: int,
+        num_discriminator_features: int,
         latent_dim: int = 128,
         lr: float = 0.0002,
         b1: float = 0.5,
         b2: float = 0.999,
-        batch_size: int = BATCH_SIZE,
+        batch_size: int = 128,
         **kwargs,
     ):
         super().__init__()
         self.save_hyperparameters()
 
-        self.data_shape = (nc, width, height)
-
         # Networks
-        self.generator = Generator(nz, ngf, nc)
-        self.discriminator = Discriminator(nc, ndf)
+        self.generator = Generator(latent_dim, num_generator_features, num_channels)
+        self.discriminator = Discriminator(num_channels, num_discriminator_features)
 
         self.generator.apply(weights_init)
         self.discriminator.apply(weights_init)
@@ -111,16 +117,11 @@ class DCGAN(pl.LightningModule):
         # Sample noise
         z = torch.randn(imgs.shape[0], self.hparams.latent_dim, 1, 1).type_as(imgs)
 
-        # train generator
+        # Train generator
         if optimizer_idx == 0:
 
             # Generate images from generator
             self.generated_imgs = self(z)
-
-            # log sampled images
-            # sample_imgs = self.generated_imgs[:6]
-            # grid = torchvision.utils.make_grid(sample_imgs)
-            # self.logger.experiment.add_image("generated_images", grid, 0)
 
             # Create the ground thruth (i.e all fake)
             validities = torch.ones(imgs.size(0), 1).type_as(imgs)
@@ -130,6 +131,8 @@ class DCGAN(pl.LightningModule):
 
             # Calculate adverserial loss
             g_loss = self.adverserial_loss(predicted_validities, validities)
+
+            # Log
             generator_acc = accuracy(validities.view(-1), predicted_validities.view(-1))
             tqdm_dict = {"g_loss": g_loss}
             self.log("generator_accuracy", generator_acc)
@@ -144,7 +147,7 @@ class DCGAN(pl.LightningModule):
 
             real_loss = self.adverserial_loss(self.discriminator(imgs), valid)
 
-            # how well can it label as fake?
+            # How well can it label as fake?
             fake = torch.zeros(imgs.size(0), 1)
             fake = fake.type_as(imgs)
 
@@ -167,7 +170,7 @@ class DCGAN(pl.LightningModule):
 
         return [opt_g, opt_d], []
 
-    def on_epoch_end(self):
+    def on_train_epoch_end(self):
         z = self.validation_z.type_as(self.generator.model[0].weight)
 
         # log sampled images
@@ -176,8 +179,9 @@ class DCGAN(pl.LightningModule):
         self.logger.log_image(key="validation_images", images=[grid])
 
 
-# custom weights initialization called on netG and netD
 def weights_init(m):
+    """Custom weight initialization used for the generator and discriminator"""
+
     classname = m.__class__.__name__
     if classname.find("Conv") != -1:
         nn.init.normal_(m.weight.data, 0.0, 0.02)
