@@ -73,7 +73,6 @@ class Discriminator(nn.Module):
             # state size. (num_discriminator_features*8) x 4 x 4
             nn.Conv2d(num_discriminator_features * 8, 1, 4, 1, 0, bias=False),
             nn.Flatten(),
-            # nn.Sigmoid(),
         )
 
     def forward(self, input):
@@ -109,7 +108,6 @@ class DCGAN(pl.LightningModule):
         return self.generator(z)
 
     def adverserial_loss(self, y_hat, y):
-        # return F.binary_cross_entropy(y_hat, y)
         return F.binary_cross_entropy_with_logits(y_hat, y)
 
     def training_step(self, batch, batch_idx, optimizer_idx):
