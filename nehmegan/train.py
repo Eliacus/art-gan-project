@@ -1,7 +1,9 @@
-from data_modules import data_modules
 import os
-from pytorch_lightning.loggers import WandbLogger
+
 from pytorch_lightning import Trainer
+from pytorch_lightning.loggers import WandbLogger
+
+from data_modules import GANImageDataModule
 from DCGAN import DCGAN
 
 # Dataset
@@ -24,7 +26,7 @@ NUM_WORKERS = int(os.cpu_count() - 1)
 BATCH_SIZE = 256
 
 wandb_logger = WandbLogger(project="gan-project")
-dm = data_modules[dataset](batch_size=BATCH_SIZE, num_workers=NUM_WORKERS)
+dm = GANImageDataModule(batch_size=BATCH_SIZE, num_workers=NUM_WORKERS, dataset=dataset)
 
 model = DCGAN(
     num_channels=num_channels,
