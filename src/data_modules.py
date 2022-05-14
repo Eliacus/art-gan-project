@@ -6,7 +6,7 @@ import torchvision.transforms as transforms
 from torch.utils.data import DataLoader
 from torchvision.datasets import ImageFolder
 
-ROOT = Path(__file__).parent.parent.resolve()
+from src import ROOT
 
 
 class GANImageDataModule(pl.LightningDataModule):
