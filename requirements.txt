@@ -3,3 +3,4 @@ pytorch-lightning
 torch
 torchvision
 wandb
+-e .

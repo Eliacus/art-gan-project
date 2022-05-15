@@ -6,7 +6,7 @@ import torchvision.transforms as transforms
 from torch.utils.data import DataLoader
 from torchvision.datasets import ImageFolder
 
-from src import ROOT
+from nehmegan import ROOT
 
 
 class GANImageDataModule(pl.LightningDataModule):
@@ -14,7 +14,7 @@ class GANImageDataModule(pl.LightningDataModule):
         self,
         batch_size: int,
         num_workers: int,
-        data_path: str,
+        dataset: str,
         image_size: tuple = (64, 64),
     ):
         """Generic datamodule for image datasets using the pytorchvision ImageFolder class
@@ -25,7 +25,8 @@ class GANImageDataModule(pl.LightningDataModule):
             image_size (tuple): Desired image size
         """
         super().__init__()
-        self.data_dir = Path.joinpath(ROOT, data_path)
+        self.dataset = dataset
+        self.data_path = Path.joinpath(ROOT, "data", dataset, "images")
         self.batch_size = batch_size
         self.num_workers = num_workers
         self.image_size = image_size
@@ -42,7 +43,7 @@ class GANImageDataModule(pl.LightningDataModule):
         )
 
     def setup(self, stage: Optional[str] = None):
-        self.ds = ImageFolder(self.data_dir, self.transforms)
+        self.ds = ImageFolder(self.data_path, self.transforms)
 
     def train_dataloader(self):
         return DataLoader(
