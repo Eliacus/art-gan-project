@@ -33,7 +33,6 @@ class GANImageDataModule(pl.LightningDataModule):
 
         self.normalization_schema = (0.5, 0.5, 0.5), (0.5, 0.5, 0.5)
 
-        # Transforms
         self.transforms = transforms.Compose(
             [
                 transforms.Resize(self.image_size),
@@ -53,39 +52,3 @@ class GANImageDataModule(pl.LightningDataModule):
             shuffle=True,
             pin_memory=True,
         )
-
-
-class CelebADataModule(GANImageDataModule):
-    def __init__(
-        self,
-        batch_size: int,
-        num_workers: int,
-        image_size: tuple = (64, 64),
-    ):
-        super().__init__(
-            batch_size=batch_size,
-            num_workers=num_workers,
-            data_path="data/celeba/img_align_celeba",
-            image_size=image_size,
-        )
-
-
-class ArtDataModule(GANImageDataModule):
-    def __init__(
-        self,
-        batch_size: int,
-        num_workers: int,
-        image_size: tuple = (64, 64),
-    ):
-        super().__init__(
-            batch_size=batch_size,
-            num_workers=num_workers,
-            data_path="data/art_dataset/resized",
-            image_size=image_size,
-        )
-
-
-data_modules = {
-    "celeba": CelebADataModule,
-    "art": ArtDataModule,
-}

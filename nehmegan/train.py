@@ -1,9 +1,10 @@
-from data_modules import data_modules
 import os
-from pytorch_lightning.loggers import WandbLogger
+
 from pytorch_lightning import Trainer
-from DCGAN import DCGAN
+from pytorch_lightning.loggers import WandbLogger
+
 from data_modules import GANImageDataModule
+from DCGAN import DCGAN
 
 # Dataset
 dataset = "celeba"
