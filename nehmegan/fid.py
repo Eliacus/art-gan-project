@@ -23,7 +23,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 import os
-import pathlib
 from pathlib import Path
 
 import numpy as np
@@ -70,7 +69,9 @@ class ImagePathDataset(torch.utils.data.Dataset):
         return img
 
 
-def get_file_activations(files, model, batch_size=50, dims=2048, device="cpu", num_workers=1):
+def get_file_activations(
+    files, model, batch_size=50, dims=2048, device="cpu", num_workers=1
+):
     """Calculates the activations of the pool_3 layer for all images.
     Params:
     -- files       : List of image files paths
@@ -90,15 +91,22 @@ def get_file_activations(files, model, batch_size=50, dims=2048, device="cpu", n
     """
     model.eval()
 
-    if batch_size > len(files):
+    if self.batch_size > len(files):
         print(
-            ("Warning: batch size is bigger than the data size. " "Setting batch size to data size")
+            (
+                "Warning: batch size is bigger than the data size. "
+                "Setting batch size to data size"
+            )
         )
         batch_size = len(files)
 
     dataset = ImagePathDataset(files)
     dataloader = torch.utils.data.DataLoader(
-        dataset, batch_size=batch_size, shuffle=False, drop_last=False, num_workers=num_workers
+        dataset,
+        batch_size=batch_size,
+        shuffle=False,
+        drop_last=False,
+        num_workers=num_workers,
     )
 
     pred_arr = np.empty((len(files), dims))
@@ -172,8 +180,12 @@ def calculate_frechet_distance(mu1, sigma1, mu2, sigma2, eps=1e-6):
     sigma1 = np.atleast_2d(sigma1)
     sigma2 = np.atleast_2d(sigma2)
 
-    assert mu1.shape == mu2.shape, "Training and test mean vectors have different lengths"
-    assert sigma1.shape == sigma2.shape, "Training and test covariances have different dimensions"
+    assert (
+        mu1.shape == mu2.shape
+    ), "Training and test mean vectors have different lengths"
+    assert (
+        sigma1.shape == sigma2.shape
+    ), "Training and test covariances have different dimensions"
 
     diff = mu1 - mu2
 
@@ -181,7 +193,8 @@ def calculate_frechet_distance(mu1, sigma1, mu2, sigma2, eps=1e-6):
     covmean, _ = linalg.sqrtm(sigma1.dot(sigma2), disp=False)
     if not np.isfinite(covmean).all():
         msg = (
-            "fid calculation produces singular product; " "adding %s to diagonal of cov estimates"
+            "fid calculation produces singular product; "
+            "adding %s to diagonal of cov estimates"
         ) % eps
         print(msg)
         offset = np.eye(sigma1.shape[0]) * eps
@@ -230,8 +243,12 @@ def compute_statistics_of_path(path, model, batch_size, dims, device, num_worker
             m, s = f["mu"][:], f["sigma"][:]
     else:
         path = pathlib.Path(path)
-        files = sorted([file for ext in IMAGE_EXTENSIONS for file in path.glob("*.{}".format(ext))])
-        m, s = calculate_activation_statistics(files, model, batch_size, dims, device, num_workers)
+        files = sorted(
+            [file for ext in IMAGE_EXTENSIONS for file in path.glob("*.{}".format(ext))]
+        )
+        m, s = calculate_activation_statistics(
+            files, model, batch_size, dims, device, num_workers
+        )
 
     return m, s
 
@@ -246,8 +263,12 @@ def calculate_fid_given_paths(paths, batch_size, device, dims, num_workers=1):
 
     model = InceptionV3([block_idx]).to(device)
 
-    m1, s1 = compute_statistics_of_path(paths[0], model, batch_size, dims, device, num_workers)
-    m2, s2 = compute_statistics_of_path(paths[1], model, batch_size, dims, device, num_workers)
+    m1, s1 = compute_statistics_of_path(
+        paths[0], model, batch_size, dims, device, num_workers
+    )
+    m2, s2 = compute_statistics_of_path(
+        paths[1], model, batch_size, dims, device, num_workers
+    )
     fid_value = calculate_frechet_distance(m1, s1, m2, s2)
 
     return fid_value
@@ -267,10 +288,123 @@ def compute_dataset_statistics(dataset_path):
     np.savez("data/celeba/img_align_celeba/inception_statistics.npz", m=m, s=s)
 
 
-class FID():
-    def __init__(self, dataset: str, image_size: int, batch_size: int = 256) -> None:
+class FID:
+    def __init__(
+        self,
+        dataset: str,
+        image_size: int,
+        batch_size: int = 256,
+        num_workers: int = 1,
+        device: str = "cpu",
+    ) -> None:
 
         self.dataset = dataset
         self.image_size = image_size
+        self.batch_size = batch_size
+        self.num_workers = num_workers
 
-        data_root = Path.joinpath(ROOT, "data", dataset)
+        self.device = device
+
+        self.data_root = Path.joinpath(ROOT, "data", dataset)
+
+        self.inception_output_dim = 2048
+        self.inception_block_idx = InceptionV3.BLOCK_INDEX_BY_DIM[
+            self.inception_output_dim
+        ]
+        self.inception_model = InceptionV3(self.inception_block_idx).to(self.device)
+
+    def compute_statistics_of_path(self):
+        images_path = Path.joinpath(self.data_root, "images")
+        files = sorted(
+            [
+                file
+                for ext in IMAGE_EXTENSIONS
+                for file in images_path.glob("*.{}".format(ext))
+            ]
+        )
+        m, s = self.calculate_files_activation_statistics(files)
+
+        return m, s
+
+    def calculate_files_activation_statistics(self, files):
+        """Calculation of the statistics used by the FID.
+        Params:
+        -- files       : List of image files paths
+        -- model       : Instance of inception model
+        -- batch_size  : The images numpy array is split into batches with
+                        batch size batch_size. A reasonable batch size
+                        depends on the hardware.
+        -- dims        : Dimensionality of features returned by Inception
+        -- device      : Device to run calculations
+        -- num_workers : Number of parallel dataloader workers
+        Returns:
+        -- mu    : The mean over samples of the activations of the pool_3 layer of
+                the inception model.
+        -- sigma : The covariance matrix of the activations of the pool_3 layer of
+                the inception model.
+        """
+        activations = self.get_file_activations(files)
+        mu = np.mean(activations, axis=0)
+        sigma = np.cov(activations, rowvar=False)
+        return mu, sigma
+
+    def get_file_activations(self, files):
+        """Calculates the activations of the pool_3 layer for all images.
+        Params:
+        -- files       : List of image files paths
+        -- model       : Instance of inception model
+        -- batch_size  : Batch size of images for the model to process at once.
+                        Make sure that the number of samples is a multiple of
+                        the batch size, otherwise some samples are ignored. This
+                        behavior is retained to match the original FID score
+                        implementation.
+        -- dims        : Dimensionality of features returned by Inception
+        -- device      : Device to run calculations
+        -- num_workers : Number of parallel dataloader workers
+        Returns:
+        -- A numpy array of dimension (num images, dims) that contains the
+        activations of the given tensor when feeding inception with the
+        query tensor.
+        """
+        self.inception_model.eval()
+
+        if self.batch_size > len(files):
+            print(
+                (
+                    "Warning: batch size is bigger than the data size. "
+                    "Setting batch size to data size"
+                )
+            )
+            self.batch_size = len(files)
+
+        dataset = ImagePathDataset(files)
+        dataloader = torch.utils.data.DataLoader(
+            dataset,
+            batch_size=self.batch_size,
+            shuffle=False,
+            drop_last=False,
+            num_workers=self.num_workers,
+        )
+
+        pred_arr = np.empty((len(files), self.inception_output_dim))
+
+        start_idx = 0
+
+        for batch in tqdm(dataloader):
+            batch = batch.to(self.device)
+
+            with torch.no_grad():
+                pred = self.inception_mode(batch)[0]
+
+            # If model output is not scalar, apply global spatial average pooling.
+            # This happens if you choose a dimensionality not equal 2048.
+            if pred.size(2) != 1 or pred.size(3) != 1:
+                pred = adaptive_avg_pool2d(pred, output_size=(1, 1))
+
+            pred = pred.squeeze(3).squeeze(2).cpu().numpy()
+
+            pred_arr[start_idx : start_idx + pred.shape[0]] = pred
+
+            start_idx = start_idx + pred.shape[0]
+
+        return pred_arr
