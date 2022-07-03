@@ -24,6 +24,7 @@ limitations under the License.
 """
 import os
 from pathlib import Path
+import pathlib
 
 import numpy as np
 import torch
@@ -32,8 +33,8 @@ from PIL import Image
 from scipy import linalg
 from torch.nn.functional import adaptive_avg_pool2d
 
-from data_modules import data_modules
-from src import ROOT
+from nehmegan.data_modules import DataLoader
+from nehmegan import ROOT
 
 try:
     from tqdm import tqdm
@@ -91,7 +92,7 @@ def get_file_activations(
     """
     model.eval()
 
-    if self.batch_size > len(files):
+    if batch_size > len(files):
         print(
             (
                 "Warning: batch size is bigger than the data size. "
@@ -311,10 +312,14 @@ class FID:
         self.inception_block_idx = InceptionV3.BLOCK_INDEX_BY_DIM[
             self.inception_output_dim
         ]
-        self.inception_model = InceptionV3(self.inception_block_idx).to(self.device)
+        self.inception_model = InceptionV3(
+            output_blocks=(self.inception_block_idx,)
+        ).to(self.device)
 
     def compute_statistics_of_path(self):
         images_path = Path.joinpath(self.data_root, "images")
+        print(images_path)
+
         files = sorted(
             [
                 file
@@ -394,7 +399,7 @@ class FID:
             batch = batch.to(self.device)
 
             with torch.no_grad():
-                pred = self.inception_mode(batch)[0]
+                pred = self.inception_model(batch)[0]
 
             # If model output is not scalar, apply global spatial average pooling.
             # This happens if you choose a dimensionality not equal 2048.
