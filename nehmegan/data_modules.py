@@ -9,9 +9,9 @@ from nehmegan.data_utils import verify_and_get_dataset_paths
 class GANImageDataModule(pl.LightningDataModule):
     def __init__(
         self,
+        dataset_name: str,
         batch_size: int,
         num_workers: int,
-        dataset_name: str,
         image_size: tuple = (64, 64),
     ):
         """
@@ -25,9 +25,8 @@ class GANImageDataModule(pl.LightningDataModule):
             image_size (tuple): Desired image size
         """
         super().__init__()
-        self.dataset_name = dataset_name
         self.dataset_root_path, self.dataset_images_path = verify_and_get_dataset_paths(
-            self.dataset_name
+            dataset_name
         )
 
         self.batch_size = batch_size

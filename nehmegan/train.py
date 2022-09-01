@@ -26,7 +26,11 @@ NUM_WORKERS = int(os.cpu_count() - 1)
 BATCH_SIZE = 256
 
 wandb_logger = WandbLogger(project="gan-project")
-dm = GANImageDataModule(batch_size=BATCH_SIZE, num_workers=NUM_WORKERS, dataset=dataset)
+dm = GANImageDataModule(
+    dataset_name=dataset,
+    batch_size=BATCH_SIZE,
+    num_workers=NUM_WORKERS,
+)
 
 model = DCGAN(
     num_channels=num_channels,
@@ -36,11 +40,11 @@ model = DCGAN(
 )
 
 trainer = Trainer(
-    gpus=1,
+    gpus=0,
     max_epochs=1000,
     precision=16,
     log_every_n_steps=30,
     logger=wandb_logger,
     track_grad_norm=2,
 )
-trainer.fit(model, dm)
+trainer.fit(model=model, datamodule=dm)
