@@ -43,8 +43,8 @@ class GANImageDataModule(pl.LightningDataModule):
             ]
         )
 
-    def setup(self):
-        self.dataset = ImageFolder(self.dataset_images_path, self.transforms)
+    def setup(self, stage=None):
+        self.dataset = ImageFolder(self.dataset_root_path, self.transforms)
 
     def train_dataloader(self):
         return DataLoader(

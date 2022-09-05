@@ -1,10 +1,12 @@
 import os
 from pathlib import Path
+from tkinter import W
 
+from torchvision.datasets import ImageFolder
+from torch.utils.data import DataLoader
 import numpy as np
 import torch
 import torchvision.transforms as transforms
-from PIL import Image
 from scipy import linalg
 from torch.nn.functional import adaptive_avg_pool2d
 from tqdm import tqdm
@@ -13,27 +15,6 @@ from inception import InceptionV3
 from nehmegan.data_utils import verify_and_get_dataset_paths
 
 IMAGE_EXTENSIONS = {"bmp", "jpg", "jpeg", "pgm", "png", "ppm", "tif", "tiff", "webp"}
-
-
-class ImagePathDataset(torch.utils.data.Dataset):
-    def __init__(self, files, image_size=64):
-        self.files = files
-        self.transforms = transforms.Compose(
-            [
-                transforms.Resize((image_size, image_size)),
-                transforms.ToTensor(),
-            ]
-        )
-
-    def __len__(self):
-        return len(self.files)
-
-    def __getitem__(self, i):
-        path = self.files[i]
-        img = Image.open(path).convert("RGB")
-        if self.transforms is not None:
-            img = self.transforms(img)
-        return img
 
 
 class FID:
@@ -68,6 +49,13 @@ class FID:
             output_blocks=(self.inception_block_idx,)
         ).to(self.device)
         self.inception_model.eval()
+
+        self.transforms = transforms.Compose(
+            [
+                transforms.Resize((self.image_size, self.image_size)),
+                transforms.ToTensor(),
+            ]
+        )
 
     def calculate_fid(self, images_batch):
         batch_mu, batch_sigma = self.compute_batch_statistics(images_batch)
@@ -161,18 +149,11 @@ class FID:
         np.savez(self.dataset_statistics_filepath, mu=mu, sigma=sigma)
 
     def compute_dataset_statistics(self):
-        files = sorted(
-            [
-                file
-                for ext in IMAGE_EXTENSIONS
-                for file in self.dataset_images_path.glob("*.{}".format(ext))
-            ]
-        )
-        m, s = self.calculate_files_activation_statistics(files)
+        m, s = self.calculate_dataset_activation_statistics()
 
         return m, s
 
-    def calculate_files_activation_statistics(self, files):
+    def calculate_dataset_activation_statistics(self):
         """Calculation of the statistics used by the FID.
         Params:
         -- files       : List of image files paths
@@ -189,12 +170,12 @@ class FID:
         -- sigma : The covariance matrix of the activations of the pool_3 layer of
                 the inception model.
         """
-        activations = self.get_file_activations(files)
+        activations = self.get_dataset_activations()
         mu = np.mean(activations, axis=0)
         sigma = np.cov(activations, rowvar=False)
         return mu, sigma
 
-    def get_file_activations(self, files):
+    def get_dataset_activations(self):
         """Calculates the activations of the pool_3 layer for all images.
         Params:
         -- files       : List of image files paths
@@ -213,17 +194,11 @@ class FID:
         query tensor.
         """
 
-        if self.batch_size > len(files):
-            print(
-                (
-                    "Warning: batch size is bigger than the data size. "
-                    "Setting batch size to data size"
-                )
-            )
-            self.batch_size = len(files)
+        dataset = ImageFolder(self.dataset_root_path, self.transforms)
 
-        dataset = ImagePathDataset(files)
-        dataloader = torch.utils.data.DataLoader(
+        self.ensure_batch_size_smaller_than_data_size(dataset_size=len(dataset))
+
+        dataloader = DataLoader(
             dataset,
             batch_size=self.batch_size,
             shuffle=False,
@@ -231,11 +206,10 @@ class FID:
             num_workers=self.num_workers,
         )
 
-        pred_arr = np.empty((len(files), self.inception_output_dim))
-
+        pred_arr = np.empty((len(dataset), self.inception_output_dim))
         start_idx = 0
 
-        for batch in tqdm(dataloader):
+        for batch, _ in tqdm(dataloader):
             batch = batch.to(self.device)
 
             with torch.no_grad():
@@ -253,3 +227,13 @@ class FID:
             start_idx = start_idx + pred.shape[0]
 
         return pred_arr
+
+    def ensure_batch_size_smaller_than_data_size(self, dataset_size):
+        if self.batch_size > dataset_size:
+            print(
+                (
+                    "Warning: batch size is bigger than the data size. "
+                    "Setting batch size to data size"
+                )
+            )
+            self.batch_size = dataset_size

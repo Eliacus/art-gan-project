@@ -7,8 +7,8 @@ from data_modules import GANImageDataModule
 from DCGAN import DCGAN
 
 # Dataset
-dataset = "celeba"
-# dataset = "art"
+dataset_name = "celeba"
+# dataset_name = "art"
 
 # Number of channels in the training images. For color images this is 3
 num_channels = 3
@@ -27,7 +27,7 @@ BATCH_SIZE = 256
 
 wandb_logger = WandbLogger(project="gan-project")
 dm = GANImageDataModule(
-    dataset_name=dataset,
+    dataset_name=dataset_name,
     batch_size=BATCH_SIZE,
     num_workers=NUM_WORKERS,
 )
@@ -37,10 +37,12 @@ model = DCGAN(
     latent_dim=latent_dim,
     num_generator_features=num_discriminator_features,
     num_discriminator_features=num_discriminator_features,
+    dataset=dataset_name,
+    image_size=64,
 )
 
 trainer = Trainer(
-    gpus=0,
+    gpus=1,
     max_epochs=1000,
     precision=16,
     log_every_n_steps=30,
