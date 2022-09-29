@@ -5,6 +5,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torchvision
+from nehmegan.fid import FID
 
 from utils import accuracy
 
@@ -85,6 +86,8 @@ class DCGAN(pl.LightningModule):
         num_channels: int,
         num_generator_features: int,
         num_discriminator_features: int,
+        dataset: str,
+        image_size: int,
         latent_dim: int = 128,
         lr: float = 0.0002,
         b1: float = 0.5,
@@ -103,6 +106,8 @@ class DCGAN(pl.LightningModule):
         self.discriminator.apply(weights_init)
 
         self.validation_z = torch.randn(4, self.hparams.latent_dim, 1, 1)
+
+        self.fid = FID(dataset_name=self.hparams.dataset, image_size=self.hparams.image_size, batch_size=self.hparams.batch_size, device="cuda")
 
     def forward(self, z):
         return self.generator(z)
@@ -133,7 +138,7 @@ class DCGAN(pl.LightningModule):
 
             # Log
             generator_acc = accuracy(validities.view(-1), predicted_validities.view(-1))
-            tqdm_dict = {"g_loss": g_loss}
+            tqdm_dict = {"g_loss": g_loss.detach()}
             self.log("generator_accuracy", generator_acc)
             self.log("g_loss", g_loss)
             output = OrderedDict({"loss": g_loss, "progress_bar": tqdm_dict, "log": tqdm_dict})
@@ -176,11 +181,13 @@ class DCGAN(pl.LightningModule):
 
     def on_train_epoch_end(self):
         z = self.validation_z.type_as(self.generator.model[0].weight)
-
-        # log sampled images
         sample_images = self(z)
+
+        fid_batch_score = self.fid.calculate_fid(sample_images)
         grid = torchvision.utils.make_grid(sample_images)
+
         self.logger.log_image(key="validation_images", images=[grid])
+        self.log("fid", fid_batch_score)
 
 
 def weights_init(m):

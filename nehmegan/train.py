@@ -1,12 +1,14 @@
-from data_modules import data_modules
 import os
-from pytorch_lightning.loggers import WandbLogger
+
 from pytorch_lightning import Trainer
+from pytorch_lightning.loggers import WandbLogger
+
+from data_modules import GANImageDataModule
 from DCGAN import DCGAN
 
 # Dataset
-dataset = "celeba"
-# dataset = "art"
+dataset_name = "celeba"
+# dataset_name = "art"
 
 # Number of channels in the training images. For color images this is 3
 num_channels = 3
@@ -24,13 +26,19 @@ NUM_WORKERS = int(os.cpu_count() - 1)
 BATCH_SIZE = 256
 
 wandb_logger = WandbLogger(project="gan-project")
-dm = data_modules[dataset](batch_size=BATCH_SIZE, num_workers=NUM_WORKERS)
+dm = GANImageDataModule(
+    dataset_name=dataset_name,
+    batch_size=BATCH_SIZE,
+    num_workers=NUM_WORKERS,
+)
 
 model = DCGAN(
     num_channels=num_channels,
     latent_dim=latent_dim,
     num_generator_features=num_discriminator_features,
     num_discriminator_features=num_discriminator_features,
+    dataset=dataset_name,
+    image_size=64,
 )
 
 trainer = Trainer(
@@ -41,4 +49,4 @@ trainer = Trainer(
     logger=wandb_logger,
     track_grad_norm=2,
 )
-trainer.fit(model, dm)
+trainer.fit(model=model, datamodule=dm)
